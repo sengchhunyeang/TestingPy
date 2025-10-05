@@ -1,5 +1,5 @@
 print("haha")
-name = input(int("enter your name :")
+name = input(int("enter your name :"))
 
 def play_ball() : 
  print("Play ball is fun")
