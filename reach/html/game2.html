@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Local Slot Machine</title>
+  <style>
+    :root{--bg:#0f172a;--card:#0b1220;--accent:#ffcc00;--muted:#94a3b8}
+    *{box-sizing:border-box;font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial}
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#04102a 0%, #061426 100%);color:#e6eef8}
+    .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{width:760px;max-width:96vw;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:14px;padding:20px;box-shadow:0 10px 30px rgba(2,6,23,0.6)}
+    h1{margin:0 0 8px;font-size:20px}
+    .top{display:flex;gap:16px;align-items:center;justify-content:space-between}
+    .controls{display:flex;gap:12px;align-items:center}
+    .btn{background:var(--accent);color:#071428;border:0;padding:10px 16px;border-radius:10px;font-weight:700;cursor:pointer}
+    .btn:active{transform:translateY(1px)}
+    input[type=number]{width:90px;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+    .status{font-size:14px;color:var(--muted)}
+    .machine{display:flex;gap:18px;justify-content:center;margin-top:18px}
+    .reel{width:160px;height:160px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.1));border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:56px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,0.03)}
+    .slot-window{height:100%;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:transform 0.2s linear}
+    .credit{font-weight:700}
+    .log{margin-top:12px;color:var(--muted);font-size:13px;min-height:20px}
+    .footer{margin-top:14px;display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:13px}
+    .highlight{color:var(--accent);font-weight:800}
+    .win{animation:winFlash 1.2s ease-in-out}
+    @keyframes winFlash{0%{box-shadow:0 0 0 rgba(255,204,0,0)}20%{box-shadow:0 0 20px rgba(255,204,0,0.12)}100%{box-shadow:0 0 30px rgba(255,204,0,0.06)}}
+    .admin-btn{position:fixed;left:12px;top:12px;background:rgba(255,255,255,0.06);color:var(--accent);border:1px solid rgba(255,255,255,0.04);padding:8px 10px;border-radius:8px;cursor:pointer;font-weight:700;z-index:999}
+    .admin-panel{position:fixed;top:0;left:0;width:100%;height:100%;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);z-index:1000}
+    .admin-content{background:var(--card);padding:20px 30px;border-radius:14px;box-shadow:0 10px 25px rgba(0,0,0,0.4);width:320px}
+    .admin-content h2{margin-top:0;text-align:center;color:var(--accent)}
+    .admin-content label{display:block;margin-top:12px;font-size:14px;color:var(--muted)}
+    .admin-content input,.admin-content select{width:100%;padding:6px;border-radius:8px;margin-top:4px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#fff}
+    .admin-actions{margin-top:16px;display:flex;justify-content:space-between}
+    .admin-actions button{flex:1;margin:0 4px;padding:8px;border-radius:8px;border:0;cursor:pointer;font-weight:700}
+    .close-btn{background:rgba(255,255,255,0.08);color:#fff}
+    .save-btn{background:var(--accent);color:#071428}
+    @media(max-width:640px){.reel{width:28vw;height:28vw;font-size:10vw}}
+  </style>
+</head>
+<body>
+  <button class="admin-btn" id="adminBtn">Admin</button>
+  <div class="admin-panel" id="adminPanel">
+    <div class="admin-content">
+      <h2>Admin Panel</h2>
+      <label>Permanent Luck (%)<input type="number" id="luckInput" min="0" max="100"></label>
+      <label>Force Next Spin Win <select id="forceNextSelect"><option value="none">No</option><option value="yes">Yes</option></select></label>
+      <label>Forced Symbol<select id="symbolSelect"></select></label>
+      <label>Set Credits<input type="number" id="creditInput" min="0"></label>
+      <div class="admin-actions">
+        <button class="close-btn" id="closeAdmin">Close</button>
+        <button class="save-btn" id="saveAdmin">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="card">
+      <div class="top">
+        <div>
+          <h1>Local Slot Machine</h1>
+          <div class="status">Run this file locally in your browser. Press <span class="highlight">Spin</span> or press <kbd>Space</kbd>.</div>
+        </div>
+        <div class="controls">
+          <label>Bet <input id="bet" type="number" min="1" value="10"></label>
+          <button id="spin" class="btn">SPIN</button>
+          <div style="text-align:right">
+            <div class="status">Credits</div>
+            <div class="credit" id="credits">1000</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="machine" role="application" aria-label="Slot machine">
+        <div class="reel" id="reel0"><div class="slot-window" id="window0">🍒</div></div>
+        <div class="reel" id="reel1"><div class="slot-window" id="window1">🍋</div></div>
+        <div class="reel" id="reel2"><div class="slot-window" id="window2">7️⃣</div></div>
+      </div>
+
+      <div class="log" id="message">Good luck!</div>
+      <div class="footer">
+        <div>Symbols: 🍒 🍋 🔔 ⭐ 🍇 🍉 7️⃣</div>
+        <div style="font-size:12px">Payouts: <span class="highlight">3x same → 10×, 2x same → 2×, 3×7 → 50×</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SYMBOLS = ['🍒','🍋','🔔','⭐','🍇','🍉','7️⃣'];
+
+    const creditsEl = document.getElementById('credits');
+    const betEl = document.getElementById('bet');
+    const spinBtn = document.getElementById('spin');
+    const messageEl = document.getElementById('message');
+    const windows = [document.getElementById('window0'), document.getElementById('window1'), document.getElementById('window2')];
+    const adminBtn = document.getElementById('adminBtn');
+    const adminPanel = document.getElementById('adminPanel');
+    const closeAdmin = document.getElementById('closeAdmin');
+    const saveAdmin = document.getElementById('saveAdmin');
+    const luckInput = document.getElementById('luckInput');
+    const forceNextSelect = document.getElementById('forceNextSelect');
+    const symbolSelect = document.getElementById('symbolSelect');
+    const creditInput = document.getElementById('creditInput');
+
+    SYMBOLS.forEach(sym=>{
+      const opt=document.createElement('option');
+      opt.value=sym; opt.textContent=sym; symbolSelect.appendChild(opt);
+    });
+
+    let credits=1000;
+    let spinning=false;
+    let adminLuck=0; // permanent luck percent
+    let forceNext=false;
+    let forcedSymbol='🍒';
+
+    function updateCredits(){creditsEl.textContent=credits;}
+    updateCredits();
+
+    function randSymbol(){return SYMBOLS[Math.floor(Math.random()*SYMBOLS.length)];}
+
+    function spin(){
+      if(spinning)return;
+      const bet=Math.max(1,Math.floor(Number(betEl.value)||1));
+      if(bet>credits){messageEl.textContent='Not enough credits to bet '+bet;return;}
+      spinning=true;spinBtn.disabled=true;messageEl.textContent='Spinning...';
+      credits-=bet;updateCredits();
+      const intervals=[];const results=[null,null,null];
+
+      for(let r=0;r<3;r++){
+        intervals[r]=setInterval(()=>{windows[r].textContent=randSymbol();},80);
+      }
+
+      setTimeout(()=>stopReel(0),800);
+      setTimeout(()=>stopReel(1),1200);
+      setTimeout(()=>stopReel(2),1600);
+
+      function stopReel(r){
+        clearInterval(intervals[r]);
+        results[r]=randSymbol();
+        windows[r].textContent=results[r];
+        windows[r].classList.add('win');setTimeout(()=>windows[r].classList.remove('win'),900);
+        if(results.every(x=>x!==null)){
+          // natural adminLuck effect (not obvious)
+          if(Math.random()<(adminLuck/100) && Math.random()<0.5){
+            const s=SYMBOLS[Math.floor(Math.random()*SYMBOLS.length)];
+            results[0]=results[1]=results[2]=s;
+          }
+          if(forceNext){
+            results[0]=results[1]=results[2]=forcedSymbol;
+            forceNext=false;
+          }
+          for(let i=0;i<3;i++)windows[i].textContent=results[i];
+          finish(results,bet);
+        }
+      }
+    }
+
+    function finish(results,bet){
+      spinning=false;spinBtn.disabled=false;
+      const[a,b,c]=results;let payout=0;let note='';
+      if(a===b&&b===c){
+        if(a==='7️⃣'){payout=bet*50;note='JACKPOT! Three 7s!';}
+        else{payout=bet*10;note='Nice! Three match!';}
+      }else if(a===b||a===c||b===c){payout=bet*2;note='Two matching symbols — small win.';}
+      else{payout=0;note='No match — try again.';}
+      if(payout>0){credits+=payout;updateCredits();messageEl.innerHTML=note+' You won <span class="highlight">'+payout+'</span> credits.';}
+      else{messageEl.textContent=note;}
+    }
+
+    spinBtn.addEventListener('click',spin);
+    window.addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();spin();}});
+    betEl.addEventListener('focus',()=>betEl.select());
+
+    adminBtn.addEventListener('click',()=>{
+      const pw=prompt('Enter admin password:');
+      if(pw!=='god'){alert('Incorrect password');return;}
+      luckInput.value=adminLuck;forceNextSelect.value=forceNext?'yes':'none';symbolSelect.value=forcedSymbol;creditInput.value=credits;adminPanel.style.display='flex';
+    });
+
+    closeAdmin.addEventListener('click',()=>{adminPanel.style.display='none';});
+    saveAdmin.addEventListener('click',()=>{
+      adminLuck=Math.max(0,Math.min(100,Number(luckInput.value)||0));
+      forceNext=forceNextSelect.value==='yes';
+      forcedSymbol=symbolSelect.value;
+      const newCredits=Math.floor(Number(creditInput.value)||credits);
+      credits=newCredits;updateCredits();
+      alert('Saved! Luck '+adminLuck+'%, Next spin '+(forceNext?'forced to '+forcedSymbol:'normal'));
+      adminPanel.style.display='none';
+    });
+
+    const live=document.createElement('div');live.setAttribute('aria-live','polite');live.style.position='absolute';live.style.left='-9999px';document.body.appendChild(live);
+    const obs=new MutationObserver(()=>{live.textContent='Credits '+credits;});obs.observe(creditsEl,{childList:true});
+    windows.forEach(w=>w.textContent=randSymbol());
+  </script>
+</body>
+</html>
