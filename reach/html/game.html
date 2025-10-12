@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Local Slot Machine</title>
+  <style>
+    :root{--bg:#0f172a;--card:#0b1220;--accent:#ffcc00;--muted:#94a3b8}
+    *{box-sizing:border-box;font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial}
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#04102a 0%, #061426 100%);color:#e6eef8}
+    .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{width:760px;max-width:96vw;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:14px;padding:20px;box-shadow:0 10px 30px rgba(2,6,23,0.6)}
+    h1{margin:0 0 8px;font-size:20px}
+    .top{display:flex;gap:16px;align-items:center;justify-content:space-between}
+    .controls{display:flex;gap:12px;align-items:center}
+    .btn{background:var(--accent);color:#071428;border:0;padding:10px 16px;border-radius:10px;font-weight:700;cursor:pointer}
+    .btn:active{transform:translateY(1px)}
+    input[type=number]{width:90px;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+    .status{font-size:14px;color:var(--muted)}
+    .machine{display:flex;gap:18px;justify-content:center;margin-top:18px}
+    .reel{width:160px;height:160px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.1));border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:56px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,0.03)}
+    .slot-window{height:100%;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:transform 0.2s linear}
+    .credit{font-weight:700}
+    .log{margin-top:12px;color:var(--muted);font-size:13px;min-height:20px}
+    .footer{margin-top:14px;display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:13px}
+    .highlight{color:var(--accent);font-weight:800}
+    /* simple glow when win */
+    .win{animation:winFlash 1.2s ease-in-out}
+    @keyframes winFlash{0%{box-shadow:0 0 0 rgba(255,204,0,0)}20%{box-shadow:0 0 20px rgba(255,204,0,0.12)}100%{box-shadow:0 0 30px rgba(255,204,0,0.06)}}
+
+    /* admin button */
+    .admin-btn{position:fixed;left:12px;top:12px;background:rgba(255,255,255,0.06);color:var(--accent);border:1px solid rgba(255,255,255,0.04);padding:8px 10px;border-radius:8px;cursor:pointer;font-weight:700;z-index:999}
+    @media(max-width:640px){.reel{width:28vw;height:28vw;font-size:10vw}}
+  </style>
+</head>
+<body>
+  <button class="admin-btn" id="adminBtn" title="Admin (password required)">Admin</button>
+  <div class="wrap">
+    <div class="card">
+      <div class="top">
+        <div>
+          <h1>Local Slot Machine</h1>
+          <div class="status">Run this file locally in your browser. Press <span class="highlight">Spin</span> or press <kbd>Space</kbd>.</div>
+        </div>
+        <div class="controls">
+          <label>Bet <input id="bet" type="number" min="1" value="10"></label>
+          <button id="spin" class="btn">SPIN</button>
+          <div style="text-align:right">
+            <div class="status">Credits</div>
+            <div class="credit" id="credits">1000</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="machine" role="application" aria-label="Slot machine">
+        <div class="reel" id="reel0"><div class="slot-window" id="window0">🍒</div></div>
+        <div class="reel" id="reel1"><div class="slot-window" id="window1">🍋</div></div>
+        <div class="reel" id="reel2"><div class="slot-window" id="window2">7️⃣</div></div>
+      </div>
+
+      <div class="log" id="message">Good luck!</div>
+      <div class="footer">
+        <div>Symbols: 🍒 🍋 🔔 ⭐ 🍇 🍉 7️⃣</div>
+        <div style="font-size:12px">Payouts: <span class="highlight">3x same → 10×, 2x same → 2×, 3×7 → 50×</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Symbols used by the reels
+    const SYMBOLS = ['🍒','🍋','🔔','⭐','🍇','🍉','7️⃣'];
+
+    const creditsEl = document.getElementById('credits');
+    const betEl = document.getElementById('bet');
+    const spinBtn = document.getElementById('spin');
+    const messageEl = document.getElementById('message');
+    const windows = [document.getElementById('window0'), document.getElementById('window1'), document.getElementById('window2')];
+    const adminBtn = document.getElementById('adminBtn');
+
+    let credits = 1000;
+    let spinning = false;
+
+    // Admin-controlled variables (defaults)
+    let adminLuck = 0; // percentage 0..100 - chance to force a winning spin
+
+    function updateCredits(){ creditsEl.textContent = credits; }
+    updateCredits();
+
+    function randSymbol(){ return SYMBOLS[Math.floor(Math.random()*SYMBOLS.length)]; }
+
+    // Visual spin: rapidly change symbols, then stop each reel staggered
+    function spin(){
+      if(spinning) return;
+      const bet = Math.max(1, Math.floor(Number(betEl.value) || 1));
+      if(bet > credits){ messageEl.textContent = 'Not enough credits to bet ' + bet; return; }
+      spinning = true;
+      spinBtn.disabled = true;
+      messageEl.textContent = 'Spinning...';
+
+      credits -= bet;
+      updateCredits();
+
+      // intervals to update each reel
+      const intervals = [];
+      const results = [null,null,null];
+
+      for(let r=0;r<3;r++){
+        let i = 0;
+        intervals[r] = setInterval(()=>{
+          windows[r].textContent = randSymbol();
+          i++;
+        }, 80);
+      }
+
+      // stop reels staggered
+      setTimeout(()=>stopReel(0), 800);
+      setTimeout(()=>stopReel(1), 1200);
+      setTimeout(()=>stopReel(2), 1600);
+
+      function stopReel(r){
+        clearInterval(intervals[r]);
+        // pick final symbol
+        // However, we compute final results later together to allow adminLuck forcing
+        results[r] = randSymbol();
+        windows[r].textContent = results[r];
+        windows[r].classList.add('win');
+        setTimeout(()=>windows[r].classList.remove('win'),900);
+
+        // if all stopped calculate
+        if(results.every(x=>x!==null)){
+          // apply admin luck: with adminLuck% chance, force a winning combination
+          let finalResults = results.slice();
+          if(Math.random() < (adminLuck/100)){
+            // force a win: choose a symbol (favor non-7) and set 3 same
+            let choices = SYMBOLS.slice();
+            // increase chance for non-7 to avoid too many jackpots
+            choices = choices.filter(s=>s!=='7️⃣');
+            const forced = choices[Math.floor(Math.random()*choices.length)];
+            finalResults = [forced, forced, forced];
+          }
+          // update displayed windows to match finalResults (in case changed)
+          for(let i=0;i<3;i++) windows[i].textContent = finalResults[i];
+          finish(finalResults, bet);
+        }
+      }
+    }
+
+    function finish(results, bet){
+      spinning = false;
+      spinBtn.disabled = false;
+      // winning logic
+      const [a,b,c] = results;
+      let payout = 0;
+      let note = '';
+
+      if(a===b && b===c){
+        if(a === '7️⃣'){
+          payout = bet * 50;
+          note = 'JACKPOT! Three 7s!';
+        } else {
+          payout = bet * 10;
+          note = 'Nice! Three match!';
+        }
+      } else if(a===b || a===c || b===c){
+        payout = bet * 2;
+        note = 'Two matching symbols — small win.';
+      } else {
+        payout = 0;
+        note = 'No match — try again.';
+      }
+
+      if(payout>0){
+        credits += payout;
+        updateCredits();
+        messageEl.innerHTML = note + ' You won <span class="highlight">' + payout + '</span> credits.';
+      } else {
+        messageEl.textContent = note;
+      }
+    }
+
+    // Admin: minimal flow, password-protected prompt. Password is exactly "god" (case-sensitive)
+    adminBtn.addEventListener('click', ()=>{
+      const pw = prompt('Enter admin password:');
+      if(pw === null) return; // user cancelled
+      if(pw !== 'god'){
+        alert('Incorrect password');
+        return;
+      }
+      // password ok — prompt for luck and credits
+      const newLuckStr = prompt('Set luck (0-100) — percent chance to force a winning spin. Current: ' + adminLuck, String(adminLuck));
+      if(newLuckStr !== null){
+        const n = Math.max(0, Math.min(100, Number(newLuckStr) || 0));
+        adminLuck = n;
+      }
+      const newCreditsStr = prompt('Set credits (leave empty to keep): Current credits: ' + credits, String(credits));
+      if(newCreditsStr !== null && newCreditsStr.trim() !== ''){
+        const c = Math.max(0, Math.floor(Number(newCreditsStr) || 0));
+        credits = c;
+        updateCredits();
+      }
+      alert('Admin updated. Luck: ' + adminLuck + '%. Credits: ' + credits);
+    });
+
+    spinBtn.addEventListener('click', spin);
+
+    // keyboard space to spin
+    window.addEventListener('keydown', (e)=>{
+      if(e.code === 'Space'){
+        e.preventDefault();
+        spin();
+      }
+    });
+
+    // small helper: click the bet to select
+    betEl.addEventListener('focus', ()=>betEl.select());
+
+    // accessibility: announce when credits change (simple)
+    const live = document.createElement('div');
+    live.setAttribute('aria-live','polite');
+    live.style.position='absolute'; live.style.left='-9999px';
+    document.body.appendChild(live);
+    const obs = new MutationObserver(()=>{ live.textContent = 'Credits ' + credits; });
+    obs.observe(creditsEl, {childList:true});
+
+    // init: show random symbols
+    windows.forEach(w=>w.textContent = randSymbol());
+  </script>
+</body>
+</html>
